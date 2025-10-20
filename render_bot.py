@@ -7,7 +7,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 
 # === CONFIGURATION ===
-BOT_TOKEN = os.environ.get('BOT_TOKEN', '8295704989:AAHTc5Vr9_7aCz_FJuGKqqgbl9vQYx2Awk8')
+BOT_TOKEN = os.environ.get('BOT_TOKEN')
 BOT_USERNAME = "StudyGeniusProBot"  # Your actual bot username
 # === END CONFIGURATION ===
 
