@@ -6,38 +6,32 @@ from flask import Flask, request
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 
-# Configuration
-BOT_TOKEN = os.environ.get('BOT_TOKEN', 'YOUR_BOT_TOKEN_HERE')
+# === CONFIGURATION - UPDATE THESE ===
+BOT_TOKEN = os.environ.get('BOT_TOKEN', '8295704989:AAHTc5Vr9_7aCz_FJuGKqqgbl9vQYx2Awk8')
+BOT_USERNAME = "StudyGeniusProBot"  # Like @StudyGeniusProBot
+ADMIN_USERNAME = "@Kingstonebridge"  # Your Telegram @username
+# === END CONFIGURATION ===
+
 RENDER_URL = os.environ.get('RENDER_EXTERNAL_URL', '')
 WEBHOOK_PORT = int(os.environ.get('PORT', 10000))
 
 # Initialize Flask
 app = Flask(__name__)
-
-# Setup logging
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
-)
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 class StudyBot:
     def __init__(self):
         self.application = Application.builder().token(BOT_TOKEN).build()
         self.setup_handlers()
-        self.logger = logging.getLogger(__name__)
     
     def setup_handlers(self):
         """Setup all bot handlers"""
-        handlers = [
-            CommandHandler("start", self.start),
-            CommandHandler("premium", self.premium_info),
-            CommandHandler("help", self.help_command),
-            CallbackQueryHandler(self.button_handler),
-            MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message)
-        ]
-        
-        for handler in handlers:
-            self.application.add_handler(handler)
+        self.application.add_handler(CommandHandler("start", self.start))
+        self.application.add_handler(CommandHandler("premium", self.premium_info))
+        self.application.add_handler(CommandHandler("help", self.help_command))
+        self.application.add_handler(CallbackQueryHandler(self.button_handler))
+        self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_message))
     
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Send welcome message"""
@@ -109,7 +103,7 @@ Use the menu below to get started! 🚀
 
 🔒 **30-day money-back guarantee**
 
-🎁 **Special Offer:** First 100 users get 50% off!
+Click below to upgrade! 🚀
         """
         
         keyboard = [
@@ -172,7 +166,6 @@ Use: `stats` to see overview
         await query.answer()
         
         data = query.data
-        self.logger.info(f"Button pressed: {data}")
         
         if data == "premium":
             await self.premium_info(update, context)
@@ -187,16 +180,7 @@ Use: `stats` to see overview
 💡 **To add a subject, send:**
 `add math` or `add subject:Mathematics`
 
-💡 **To remove a subject, send:**
-`remove math` or `delete math`
-
 📋 **Your current subjects will appear here as you add them.**
-
-🎯 **Tip:** Organize by topics like:
-• mathematics
-• physics_101  
-• english_literature
-• computer_science
             """
             await query.edit_message_text(subjects_text, parse_mode='Markdown')
         
@@ -210,7 +194,7 @@ Use: `stats` to see overview
 📅 **Study Sessions:** 0
 ⏱️ **Total Study Time:** 0 hours
 
-🚀 **Upgrade to Premium** to unlock advanced analytics and tracking!
+🚀 **Upgrade to Premium** to unlock advanced analytics!
             """
             
             keyboard = [
@@ -219,42 +203,8 @@ Use: `stats` to see overview
             ]
             await query.edit_message_text(stats_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
         
-        elif data == "tools":
-            tools_text = """
-🎯 **Study Tools**
-
-⏰ **Productivity Timer:**
-• Pomodoro technique (25min work, 5min break)
-• Custom study sessions
-• Break timers
-
-📝 **Study Planner:**
-• Weekly study schedules
-• Exam countdowns
-• Task prioritization
-
-📊 **Progress Tracker:**
-• Study hour tracking
-• Goal completion
-• Performance insights
-
-🔔 **Smart Reminders:**
-• Scheduled study sessions
-• Assignment deadlines
-• Review reminders
-
-💡 **Use commands to access these tools!**
-            """
-            
-            keyboard = [
-                [InlineKeyboardButton("⏰ Start Timer", callback_data="start_timer")],
-                [InlineKeyboardButton("📝 Study Planner", callback_data="planner")],
-                [InlineKeyboardButton("🔙 Main Menu", callback_data="main_menu")]
-            ]
-            await query.edit_message_text(tools_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
-        
         elif data.startswith("buy_"):
-            plan = data[4:]  # monthly, quarterly, yearly
+            plan = data[4:]
             prices = {"monthly": 5, "quarterly": 12, "yearly": 40}
             
             payment_text = f"""
@@ -262,87 +212,46 @@ Use: `stats` to see overview
 
 **Plan:** {plan.capitalize()} Subscription
 **Price:** ${prices[plan]} USD
-**Duration:** {'1 month' if plan == 'monthly' else '3 months' if plan == 'quarterly' else '1 year'}
 
 📝 **Payment Instructions:**
 
-1. **Send ${prices[plan]} USDT** to:
-   `TBN9pJzM8VqL6k7Z2x1W0yV3rS4tG5hF6d`
+1. **Contact {ADMIN_USERNAME}** for payment details
+2. **Mention:** "I want {plan} premium"
+3. **You'll receive** payment instructions
+4. **Activation within 1 hour** after payment
 
-2. **Include memo:** `study_{plan}_{query.from_user.id}`
-
-3. **Screenshot** your payment confirmation
-
-4. **Forward screenshot** to @StudyHelperAdmin
-
-✅ **Activation within 1 hour after payment verification**
-
-🔙 **Changed your mind?** Go back to explore other plans.
+✅ **Start studying smarter with premium features!**
             """
             
             keyboard = [
-                [InlineKeyboardButton("📸 I've Paid - Contact Admin", url="https://t.me/StudyHelperAdmin")],
-                [InlineKeyboardButton("🔙 View Other Plans", callback_data="premium")],
+                [InlineKeyboardButton("💬 Contact Admin", url=f"https://t.me/{ADMIN_USERNAME.replace('@', '')}")],
+                [InlineKeyboardButton("🔙 View Plans", callback_data="premium")],
                 [InlineKeyboardButton("🏠 Main Menu", callback_data="main_menu")]
             ]
             await query.edit_message_text(payment_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
         
         elif data == "main_menu":
             await self.start(update, context)
-        
-        elif data == "help":
-            await self.help_command(update, context)
     
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle text messages"""
         user_message = update.message.text.lower().strip()
-        user = update.effective_user
         
-        self.logger.info(f"Message from {user.first_name}: {user_message}")
-        
-        # Subject management
         if user_message.startswith(('add ', 'create ')):
             subject = user_message[4:].strip()
-            if subject:
-                response = f"✅ Subject '{subject.title()}' added successfully! 📚\n\nUse 'subjects' to view all your subjects."
-            else:
-                response = "❌ Please specify a subject name. Example: 'add mathematics'"
+            response = f"✅ Subject '{subject.title()}' added successfully! 📚"
         
         elif user_message.startswith(('remove ', 'delete ')):
             subject = user_message[7:].strip()
-            if subject:
-                response = f"🗑️ Subject '{subject.title()}' removed successfully!"
-            else:
-                response = "❌ Please specify which subject to remove."
+            response = f"🗑️ Subject '{subject.title()}' removed successfully!"
         
         elif user_message in ['subjects', 'list subjects']:
             response = "📚 Your Subjects:\n\n• No subjects added yet\n\nUse 'add [subject]' to add your first subject!"
         
-        # Reminder system
-        elif user_message.startswith('remind '):
-            response = "🔔 Reminder system activated! (Premium feature)\n\nUpgrade to premium to set smart study reminders! ⭐"
-        
-        elif user_message == 'reminders':
-            response = "🔔 Your Reminders:\n\n• No reminders set\n\nUpgrade to premium to set study reminders! ⭐"
-        
-        # Study timer
-        elif user_message.startswith('timer '):
-            response = "⏰ Study timer started! (Premium feature)\n\nUpgrade to premium for advanced timer features! ⭐"
-        
-        # Progress tracking
-        elif user_message.startswith('progress '):
-            response = "📊 Progress recorded! (Premium feature)\n\nUpgrade to premium for detailed analytics! ⭐"
-        
-        elif user_message in ['stats', 'statistics']:
-            response = "📊 **Your Study Stats:**\n\n• Subjects: 0/3\n• Study Time: 0 hours\n• Sessions: 0\n\nUpgrade to premium for advanced analytics! ⭐"
-        
-        # Default response
         else:
             responses = [
                 "I'm here to help with your studies! Use the menu or type 'help' for guidance. 📚",
-                "Need study assistance? Try adding subjects or check out our premium features! 🎯",
-                "Use buttons below to navigate, or type 'help' to see all available commands! 🤖",
-                "Ready to boost your productivity? Let me help organize your studies! 🚀"
+                "Need study assistance? Try adding subjects or check out premium features! 🎯"
             ]
             import random
             response = random.choice(responses)
@@ -354,65 +263,61 @@ Use: `stats` to see overview
         if RENDER_URL:
             webhook_url = f"{RENDER_URL}/webhook"
             await self.application.bot.set_webhook(webhook_url)
-            self.logger.info(f"✅ Webhook configured: {webhook_url}")
+            logger.info(f"✅ Webhook configured: {webhook_url}")
             return True
-        else:
-            self.logger.warning("❌ RENDER_URL not set, using polling mode")
-            return False
+        return False
 
-# Initialize bot instance
+# Initialize bot
 study_bot = StudyBot()
 
-# Flask routes
+# === UPDATED HTML WITH YOUR ACTUAL BOT LINK ===
 @app.route('/')
 def home():
-    return """
+    your_bot_link = f"https://t.me/{BOT_USERNAME.replace('@', '')}" if BOT_USERNAME != "YOUR_ACTUAL_BOT_USERNAME" else "#"
+    
+    return f'''
     <!DOCTYPE html>
     <html>
     <head>
         <title>Study Helper Pro Bot</title>
         <style>
-            body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
-            .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 40px; border-radius: 10px; text-align: center; }
-            .features { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin: 30px 0; }
-            .feature { background: #f8f9fa; padding: 20px; border-radius: 8px; border-left: 4px solid #667eea; }
-            .btn { display: inline-block; background: #667eea; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; margin: 10px; }
+            body {{ font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }}
+            .header {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 40px; border-radius: 10px; text-align: center; }}
+            .btn {{ display: inline-block; background: #25D366; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; margin: 10px; font-size: 18px; }}
+            .features {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin: 30px 0; }}
+            .feature {{ background: #f8f9fa; padding: 20px; border-radius: 8px; border-left: 4px solid #667eea; }}
         </style>
     </head>
     <body>
         <div class="header">
             <h1>🎓 Study Helper Pro</h1>
             <p>Your AI-powered study assistant on Telegram</p>
-            <a href="https://t.me/YourBotUsername" class="btn">Start Using Bot</a>
+            <a href="{your_bot_link}" class="btn">🚀 Start Using OUR Bot</a>
+            <p><small>Direct link to YOUR unique bot</small></p>
         </div>
         
         <div class="features">
             <div class="feature">
                 <h3>📚 Subject Management</h3>
-                <p>Organize and track all your study subjects in one place</p>
+                <p>Organize and track all your study subjects</p>
             </div>
             <div class="feature">
                 <h3>🔔 Smart Reminders</h3>
-                <p>Never miss a study session with intelligent scheduling</p>
+                <p>Never miss a study session</p>
             </div>
             <div class="feature">
                 <h3>📊 Progress Analytics</h3>
-                <p>Track your study time and monitor your improvement</p>
-            </div>
-            <div class="feature">
-                <h3>🎯 Study Planner</h3>
-                <p>Create optimized study schedules for maximum efficiency</p>
+                <p>Track your study time and improvement</p>
             </div>
         </div>
         
         <div style="text-align: center; margin-top: 40px;">
             <h2>Ready to Boost Your Grades?</h2>
-            <p>Join thousands of students already using Study Helper Pro</p>
-            <a href="https://t.me/YourBotUsername" class="btn">🚀 Start Studying Smarter</a>
+            <a href="{your_bot_link}" class="btn">🎯 Start Studying Smarter</a>
         </div>
     </body>
     </html>
-    """
+    '''
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
@@ -420,42 +325,27 @@ def webhook():
     try:
         json_str = request.get_data().decode('UTF-8')
         update = Update.de_json(json_str, study_bot.application.bot)
-        
-        # Process update in async context
-        async def process_update():
-            await study_bot.application.process_update(update)
-        
-        asyncio.run(process_update())
+        asyncio.run(study_bot.application.process_update(update))
         return 'ok'
     except Exception as e:
-        study_bot.logger.error(f"Webhook error: {e}")
+        logger.error(f"Webhook error: {e}")
         return 'error', 500
 
 @app.route('/health')
 def health_check():
-    """Health check endpoint for monitoring"""
     return {'status': 'healthy', 'bot': 'running'}, 200
 
 def run_flask():
-    """Run Flask server"""
     app.run(host='0.0.0.0', port=WEBHOOK_PORT, debug=False, use_reloader=False)
 
 async def main():
-    """Main application entry point"""
-    try:
-        # Try webhook first (production)
-        if await study_bot.setup_webhook():
-            study_bot.logger.info("🚀 Bot running in WEBHOOK mode")
-        else:
-            study_bot.logger.info("🔧 Bot running in POLLING mode")
-            await study_bot.application.run_polling()
-    except Exception as e:
-        study_bot.logger.error(f"Failed to start bot: {e}")
+    if await study_bot.setup_webhook():
+        logger.info("🚀 Bot running in WEBHOOK mode")
+    else:
+        logger.info("🔧 Bot running in POLLING mode")
+        await study_bot.application.run_polling()
 
 if __name__ == '__main__':
-    # Start Flask in background thread
     flask_thread = Thread(target=run_flask, daemon=True)
     flask_thread.start()
-    
-    # Run bot
     asyncio.run(main())
