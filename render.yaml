@@ -8,5 +8,9 @@ services:
     envVars:
       - key: BOT_TOKEN
         sync: false
-      - key: PYTHON_VERSION
-        value: 3.13.4
+      - key: BINANCE_WALLET_ADDRESS
+        sync: false
+      - key: ADMIN_USERNAME
+        value: "@Kingstonebridge"
+      - key: ADMIN_ID
+        value: "5665906172"
