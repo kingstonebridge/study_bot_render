@@ -352,6 +352,7 @@ def main():
     print("✅ Bot is now running and listening for messages!")
 
 # ==================== FLASK APP FOR RENDER ====================
+# ==================== FLASK APP FOR RENDER ====================
 app = Flask(__name__)
 
 @app.route('/')
@@ -366,9 +367,19 @@ def health():
 def webhook():
     return 'ok'
 
-# ==================== RUN BOT IN POLLING MODE ====================
-if __name__ == '__main__':
-    # Start the bot in polling mode (this will work!)
+# ==================== RUN BOT IN BACKGROUND ====================
+def run_bot():
+    """Run the bot in a separate thread"""
     print("🚀 Starting bot in POLLING mode...")
     bot = StudyBot()
     bot.application.run_polling()
+
+# Start bot in background thread when Flask starts
+import threading
+bot_thread = threading.Thread(target=run_bot, daemon=True)
+bot_thread.start()
+print("✅ Bot started in background thread!")
+
+if __name__ == '__main__':
+    # This keeps Flask running
+    app.run(host='0.0.0.0', port=10000, debug=False)
