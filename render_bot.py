@@ -351,5 +351,24 @@ def main():
     bot.application.run_polling()
     print("✅ Bot is now running and listening for messages!")
 
+# ==================== FLASK APP FOR RENDER ====================
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "✅ Study Helper Pro Bot is running!"
+
+@app.route('/health')
+def health():
+    return {"status": "ok"}, 200
+
+@app.route('/webhook', methods=['POST'])
+def webhook():
+    return 'ok'
+
+# ==================== RUN BOT IN POLLING MODE ====================
 if __name__ == '__main__':
-    main()
+    # Start the bot in polling mode (this will work!)
+    print("🚀 Starting bot in POLLING mode...")
+    bot = StudyBot()
+    bot.application.run_polling()
