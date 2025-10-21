@@ -368,13 +368,24 @@ def webhook():
     return 'ok'
 
 # ==================== RUN BOT IN BACKGROUND ====================
+# ==================== RUN BOT IN BACKGROUND ====================
 def run_bot():
-    """Run the bot in a separate thread"""
+    """Run the bot in a separate thread with proper event loop"""
     print("🚀 Starting bot in POLLING mode...")
-    bot = StudyBot()
-    bot.application.run_polling()
+    
+    # Create new event loop for this thread
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    
+    try:
+        bot = StudyBot()
+        loop.run_until_complete(bot.application.run_polling())
+    except Exception as e:
+        print(f"❌ Bot error: {e}")
+    finally:
+        loop.close()
 
-# Start bot in background thread when Flask starts
+# Start bot in background thread
 import threading
 bot_thread = threading.Thread(target=run_bot, daemon=True)
 bot_thread.start()
