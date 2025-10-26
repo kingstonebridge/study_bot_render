@@ -220,15 +220,62 @@ class LiveSignalScraper:
             return []
     
     def get_market_movers(self):
-        """Get top market movers"""
-        try:
-            print("🎯 Analyzing market movers...")
-            response = requests.get('https://api.binance.com/api/v3/ticker/24hr', timeout=10)
-            data = response.json()
-            
-            # Get top gainers and losers
-            usdt_pairs = [t for t in data if t['symbol'].endswith('USDT') and float(t['volume']) > 1000]
-            
+    """Get top market movers - ONLY VALID BINANCE SYMBOLS"""
+    try:
+        print("🎯 Analyzing market movers...")
+        response = requests.get('https://api.binance.com/api/v3/ticker/24hr', timeout=10)
+        data = response.json()
+        
+        # Only major coins that definitely exist on Binance
+        VALID_MAJOR_COINS = [
+            'BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'ADAUSDT', 'DOTUSDT', 
+            'LINKUSDT', 'LTCUSDT', 'BCHUSDT', 'XRPUSDT', 'EOSUSDT',
+            'TRXUSDT', 'XLMUSDT', 'ATOMUSDT', 'XTZUSDT', 'VETUSDT',
+            'THETAUSDT', 'FILUSDT', 'DOGEUSDT', 'SOLUSDT', 'MATICUSDT',
+            'AVAXUSDT', 'ALGOUSDT', 'NEARUSDT', 'FTMUSDT', 'SANDUSDT',
+            'MANAUSDT', 'AAVEUSDT', 'UNIUSDT', 'MKRUSDT', 'COMPUSDT'
+        ]
+        
+        # Filter for valid major coins with good volume
+        valid_pairs = [t for t in data if t['symbol'] in VALID_MAJOR_COINS and float(t['volume']) > 100000]
+        
+        # Get top gainers and losers
+        gainers = sorted(valid_pairs, key=lambda x: float(x['priceChangePercent']), reverse=True)[:5]
+        losers = sorted(valid_pairs, key=lambda x: float(x['priceChangePercent']))[:5]
+        
+        signals = []
+        
+        # Add top gainers as BUY signals
+        for gainer in gainers:
+            change = float(gainer['priceChangePercent'])
+            if change > 3.0:  # Significant movement
+                signals.append({
+                    'symbol': gainer['symbol'],
+                    'source': 'MarketMovers',
+                    'type': 'BUY',
+                    'confidence': min(0.85, change / 15),
+                    'reason': f"Top gainer: {change:.1f}%",
+                    'timestamp': datetime.now()
+                })
+        
+        # Add top losers as SELL signals
+        for loser in losers:
+            change = float(loser['priceChangePercent'])
+            if change < -2.0:  # Significant drop
+                signals.append({
+                    'symbol': loser['symbol'],
+                    'source': 'MarketMovers',
+                    'type': 'SELL', 
+                    'confidence': min(0.75, abs(change) / 12),
+                    'reason': f"Top loser: {change:.1f}%",
+                    'timestamp': datetime.now()
+                })
+        
+        return signals
+        
+    except Exception as e:
+        print(f"❌ Market movers analysis failed: {e}")
+        return []
             # Manual sorting without pandas
             def get_price_change(ticker):
                 return float(ticker['priceChangePercent'])
@@ -425,24 +472,22 @@ class SignalExecutor:
             print(f"❌ Signal execution failed: {e}")
     
     def calculate_position_size(self, symbol):
-        """Calculate appropriate position size"""
-        # Small fixed sizes for demo
-        size_map = {
-            'BTCUSDT': 0.0005,   # ~$20
-            'ETHUSDT': 0.003,    # ~$10
-            'BNBUSDT': 0.02,     # ~$5
-        }
-        
-        # Default size for other coins
-        default_size = 1.0 if any(x in symbol for x in ['USDT', 'BUSD']) else 10.0
-        
-        # Get base asset
-        base_asset = symbol.replace('USDT', '')
-        
-        if base_asset in ['BTC', 'ETH', 'BNB']:
-            return size_map.get(symbol, 0.01)
-        else:
-            return 5.0  # $5 worth for altcoins
+    """Calculate appropriate position size with proper notional value"""
+    # Minimum notional value on Binance is usually $10-$15
+    size_map = {
+        'BTCUSDT': 0.001,    # ~$60-70
+        'ETHUSDT': 0.01,     # ~$30-40
+        'BNBUSDT': 0.1,      # ~$25-30
+        'ADAUSDT': 100,      # ~$40-50
+        'DOTUSDT': 5,        # ~$30-40
+        'LINKUSDT': 2,       # ~$30-40
+        'LTCUSDT': 0.5,      # ~$40-50
+        'BCHUSDT': 0.1,      # ~$40-50
+        'XRPUSDT': 100,      # ~$40-50
+        'default': 50        # ~$25-50 for most alts
+    }
+    
+    return size_map.get(symbol, size_map['default'])altcoins
 
 def main():
     print("""
