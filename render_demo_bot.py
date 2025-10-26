@@ -3,36 +3,12 @@ import json
 import time
 from binance.client import Client
 from binance.exceptions import BinanceAPIException
-from bs4 import BeautifulSoup
-from selenium import webdriver
-from selenium.webdriver.firefox.options import Options
 from datetime import datetime
 
 # ===== BINANCE TESTNET CONFIG =====
+# ⚠️ REPLACE WITH YOUR NEW API KEYS!
 TESTNET_API_KEY = "3hHNdquTkoDws8sZkudSbG0GXSD2B53JjQJhrH83gJuWwQ9GrP4K1OkujyfSn1Ss"
 TESTNET_API_SECRET = "iVUTAIQWT9lYNoEINehGwPYOxoeZECAh8FnnagHhcY14iNStom9ojhcKiqbumxT9"
-
-# Use Binance Testnet URL
-TESTNET_URL = "https://testnet.binance.vision/api"
-
-# ===== SIGNAL SOURCES =====
-SIGNAL_SOURCES = [
-    {
-        'name': 'TradingView Top Crypto',
-        'url': 'https://www.tradingview.com/markets/cryptocurrencies/ideas/',
-        'type': 'scrape'
-    },
-    {
-        'name': 'CoinMarketCap Gainers',
-        'url': 'https://api.coinmarketcap.com/data-api/v3/cryptocurrency/listing?start=1&limit=100&sortBy=percent_change_24h&sortType=desc',
-        'type': 'api'
-    },
-    {
-        'name': 'Binance Top Volume',
-        'url': 'https://api.binance.com/api/v3/ticker/24hr',
-        'type': 'api'
-    }
-]
 
 class RealBinanceTrader:
     def __init__(self, api_key, api_secret, testnet=True):
@@ -46,10 +22,9 @@ class RealBinanceTrader:
             account = self.client.get_account()
             print(f"✅ Testnet connected! Account: {account['accountType']}")
             
-            # Get testnet balance
             balances = [bal for bal in account['balances'] if float(bal['free']) > 0]
             print("💰 Testnet Balances:")
-            for bal in balances[:5]:  # Show top 5
+            for bal in balances[:5]:
                 print(f"   {bal['asset']}: {bal['free']}")
                 
         except Exception as e:
@@ -66,19 +41,25 @@ class RealBinanceTrader:
                 return min_qty, step_size
         except:
             pass
-        return 0.001, 0.001  # Default values
+        return 0.001, 0.001
     
-    def execute_real_demo_trade(self, symbol, side, quantity, order_type=Client.ORDER_TYPE_MARKET):
-        """Execute REAL order on Binance Testnet"""
+    def execute_real_demo_trade(self, symbol, side, order_type=Client.ORDER_TYPE_MARKET):
+        """Execute REAL order on Binance Testnet with proper sizing"""
         try:
-            print(f"🎯 Executing REAL TESTNET ORDER: {side} {quantity} {symbol}")
+            print(f"🎯 Executing REAL TESTNET ORDER: {side} {symbol}")
             
-            # Validate symbol exists
+            # Get current price first
             try:
-                self.client.get_symbol_ticker(symbol=symbol)
+                ticker = self.client.get_symbol_ticker(symbol=symbol)
+                current_price = float(ticker['price'])
+                print(f"💰 Current price: ${current_price:.4f}")
             except:
                 print(f"❌ Symbol {symbol} not found on Binance")
                 return None
+            
+            # Calculate proper quantity for $20-30 order (well above minimum)
+            target_usd_value = 25.0  # $25 per trade
+            quantity = target_usd_value / current_price
             
             # Get symbol precision
             min_qty, step_size = self.get_symbol_info(symbol)
@@ -87,7 +68,8 @@ class RealBinanceTrader:
             quantity = max(quantity, min_qty)
             quantity = round(quantity / step_size) * step_size
             
-            print(f"📊 Order details: {side} {quantity} {symbol} (Type: {order_type})")
+            final_value = quantity * current_price
+            print(f"📊 Order details: {side} {quantity:.4f} {symbol} = ${final_value:.2f}")
             
             # EXECUTE REAL TESTNET ORDER
             order = self.client.create_order(
@@ -111,123 +93,9 @@ class RealBinanceTrader:
             print(f"❌ Trade execution failed: {e}")
             return None
 
-class LiveSignalScraper:
+class SmartSignalFinder:
     def __init__(self):
-        self.setup_browser()
-    
-    def setup_browser(self):
-        """Setup headless Firefox for scraping"""
-        print("🌐 Setting up Firefox for live scraping...")
-        firefox_options = Options()
-        firefox_options.add_argument('--headless')
-        firefox_options.add_argument('--no-sandbox')
-        firefox_options.add_argument('--disable-dev-shm-usage')
-        firefox_options.add_argument('--user-agent=Mozilla/5.0 (X11; Linux x86_64; rv:91.0) Gecko/20100101 Firefox/91.0')
-        
-        try:
-            self.driver = webdriver.Firefox(options=firefox_options)
-            print("✅ Firefox setup complete")
-        except Exception as e:
-            print(f"❌ Firefox setup failed: {e}")
-            self.driver = None
-    
-    def scrape_tradingview_live(self):
-        """Scrape live signals from TradingView"""
-        signals = []
-        if not self.driver:
-            return signals
-            
-        try:
-            print("📊 Scraping LIVE TradingView signals...")
-            url = "https://www.tradingview.com/markets/cryptocurrencies/ideas/"
-            self.driver.get(url)
-            time.sleep(8)  # Wait for page load
-            
-            # Get page source and parse
-            soup = BeautifulSoup(self.driver.page_source, 'html.parser')
-            
-            # Find trading ideas
-            ideas = soup.find_all('div', class_='tv-widget-idea')[:15]
-            
-            for idea in ideas:
-                try:
-                    title_elem = idea.find('div', class_='tv-widget-idea__title')
-                    if title_elem:
-                        title = title_elem.text.strip().upper()
-                        
-                        # Extract symbol from title
-                        symbol = self.extract_symbol(title)
-                        if symbol:
-                            # Determine signal type from title
-                            signal_type = self.analyze_sentiment(title)
-                            
-                            signals.append({
-                                'symbol': symbol + 'USDT',
-                                'source': 'TradingView',
-                                'type': signal_type,
-                                'confidence': 0.75,
-                                'reason': title[:80],
-                                'timestamp': datetime.now()
-                            })
-                except Exception as e:
-                    continue
-                    
-            print(f"✅ Scraped {len(signals)} signals from TradingView")
-            return signals
-            
-        except Exception as e:
-            print(f"❌ TradingView scrape failed: {e}")
-            return []
-    
-    def get_binance_top_volume(self):
-        """Get top volume coins from Binance API"""
-        try:
-            print("📈 Getting Binance top volume signals...")
-            response = requests.get('https://api.binance.com/api/v3/ticker/24hr', timeout=10)
-            data = response.json()
-            
-            # Filter USDT pairs and sort by volume
-            usdt_pairs = [ticker for ticker in data if ticker['symbol'].endswith('USDT')]
-            
-            # Manual sorting without pandas
-            def get_volume(ticker):
-                return float(ticker['volume'])
-            
-            usdt_pairs.sort(key=get_volume, reverse=True)
-            top_volume = usdt_pairs[:10]
-            
-            signals = []
-            for ticker in top_volume:
-                price_change = float(ticker['priceChangePercent'])
-                
-                # Generate signal based on volume and price change
-                if price_change > 2.0:  # Only if price is moving
-                    signal_type = 'BUY' if price_change > 0 else 'SELL'
-                    
-                    signals.append({
-                        'symbol': ticker['symbol'],
-                        'source': 'BinanceVolume',
-                        'type': signal_type,
-                        'confidence': min(0.8, abs(price_change) / 10 + 0.3),
-                        'reason': f"Volume: {float(ticker['volume']):.0f}, Change: {price_change:.1f}%",
-                        'timestamp': datetime.now()
-                    })
-            
-            return signals
-            
-        except Exception as e:
-            print(f"❌ Binance volume data failed: {e}")
-            return []
-    
-    def get_market_movers(self):
-    """Get top market movers - ONLY VALID BINANCE SYMBOLS"""
-    try:
-        print("🎯 Analyzing market movers...")
-        response = requests.get('https://api.binance.com/api/v3/ticker/24hr', timeout=10)
-        data = response.json()
-        
-        # Only major coins that definitely exist on Binance
-        VALID_MAJOR_COINS = [
+        self.major_coins = [
             'BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'ADAUSDT', 'DOTUSDT', 
             'LINKUSDT', 'LTCUSDT', 'BCHUSDT', 'XRPUSDT', 'EOSUSDT',
             'TRXUSDT', 'XLMUSDT', 'ATOMUSDT', 'XTZUSDT', 'VETUSDT',
@@ -235,272 +103,211 @@ class LiveSignalScraper:
             'AVAXUSDT', 'ALGOUSDT', 'NEARUSDT', 'FTMUSDT', 'SANDUSDT',
             'MANAUSDT', 'AAVEUSDT', 'UNIUSDT', 'MKRUSDT', 'COMPUSDT'
         ]
+    
+    def get_binance_signals_with_retry(self):
+        """Get signals from Binance API with retry logic"""
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                print(f"📈 Getting Binance signals (attempt {attempt + 1})...")
+                response = requests.get('https://api.binance.com/api/v3/ticker/24hr', timeout=15)
+                data = response.json()
+                return self.process_binance_data(data)
+            except Exception as e:
+                print(f"❌ Attempt {attempt + 1} failed: {e}")
+                if attempt < max_retries - 1:
+                    time.sleep(2)
         
-        # Filter for valid major coins with good volume
-        valid_pairs = [t for t in data if t['symbol'] in VALID_MAJOR_COINS and float(t['volume']) > 100000]
-        
-        # Get top gainers and losers
-        gainers = sorted(valid_pairs, key=lambda x: float(x['priceChangePercent']), reverse=True)[:5]
-        losers = sorted(valid_pairs, key=lambda x: float(x['priceChangePercent']))[:5]
-        
+        print("❌ All Binance API attempts failed")
+        return self.get_fallback_signals()
+    
+    def process_binance_data(self, data):
+        """Process Binance data into trading signals"""
         signals = []
         
-        # Add top gainers as BUY signals
-        for gainer in gainers:
-            change = float(gainer['priceChangePercent'])
-            if change > 3.0:  # Significant movement
-                signals.append({
-                    'symbol': gainer['symbol'],
-                    'source': 'MarketMovers',
-                    'type': 'BUY',
-                    'confidence': min(0.85, change / 15),
-                    'reason': f"Top gainer: {change:.1f}%",
-                    'timestamp': datetime.now()
-                })
+        # Filter for major coins only
+        major_data = [t for t in data if t['symbol'] in self.major_coins and float(t['volume']) > 100000]
         
-        # Add top losers as SELL signals
-        for loser in losers:
-            change = float(loser['priceChangePercent'])
-            if change < -2.0:  # Significant drop
-                signals.append({
-                    'symbol': loser['symbol'],
-                    'source': 'MarketMovers',
-                    'type': 'SELL', 
-                    'confidence': min(0.75, abs(change) / 12),
-                    'reason': f"Top loser: {change:.1f}%",
-                    'timestamp': datetime.now()
-                })
+        if not major_data:
+            return self.get_fallback_signals()
+        
+        # Strategy 1: Top volume with positive momentum
+        volume_signals = self.get_volume_signals(major_data)
+        signals.extend(volume_signals)
+        
+        # Strategy 2: Biggest gainers
+        gainer_signals = self.get_gainer_signals(major_data)
+        signals.extend(gainer_signals)
+        
+        # Strategy 3: Oversold bounce candidates
+        oversold_signals = self.get_oversold_signals(major_data)
+        signals.extend(oversold_signals)
         
         return signals
-        
-    except Exception as e:
-        print(f"❌ Market movers analysis failed: {e}")
-        return []
-            # Manual sorting without pandas
-            def get_price_change(ticker):
-                return float(ticker['priceChangePercent'])
-            
-            # Sort gainers (descending)
-            gainers = sorted(usdt_pairs, key=get_price_change, reverse=True)[:5]
-            # Sort losers (ascending)
-            losers = sorted(usdt_pairs, key=get_price_change)[:5]
-            
-            signals = []
-            
-            # Add top gainers as BUY signals
-            for gainer in gainers:
-                change = float(gainer['priceChangePercent'])
-                if change > 5.0:  # Significant movement
-                    signals.append({
-                        'symbol': gainer['symbol'],
-                        'source': 'MarketMovers',
-                        'type': 'BUY',
-                        'confidence': min(0.85, change / 15),
-                        'reason': f"Top gainer: {change:.1f}%",
-                        'timestamp': datetime.now()
-                    })
-            
-            # Add top losers as SELL signals
-            for loser in losers:
-                change = float(loser['priceChangePercent'])
-                if change < -3.0:  # Significant drop
-                    signals.append({
-                        'symbol': loser['symbol'],
-                        'source': 'MarketMovers',
-                        'type': 'SELL', 
-                        'confidence': min(0.75, abs(change) / 12),
-                        'reason': f"Top loser: {change:.1f}%",
-                        'timestamp': datetime.now()
-                    })
-            
-            return signals
-            
-        except Exception as e:
-            print(f"❌ Market movers analysis failed: {e}")
-            return []
     
-    def extract_symbol(self, title):
-        """Extract cryptocurrency symbol from title"""
-        crypto_symbols = [
-            'BTC', 'ETH', 'BNB', 'ADA', 'DOT', 'LINK', 'LTC', 'BCH', 'XRP', 
-            'EOS', 'TRX', 'XLM', 'ATOM', 'XTZ', 'VET', 'THETA', 'FIL', 'DOGE',
-            'SOL', 'MATIC', 'AVAX', 'ALGO', 'NEAR', 'FTM', 'SAND', 'MANA'
-        ]
+    def get_volume_signals(self, data):
+        """Signals based on high volume and momentum"""
+        # Sort by volume (descending)
+        high_volume = sorted(data, key=lambda x: float(x['volume']), reverse=True)[:10]
         
-        for symbol in crypto_symbols:
-            if symbol in title:
-                return symbol
-        return None
+        signals = []
+        for ticker in high_volume:
+            change = float(ticker['priceChangePercent'])
+            if change > 2.0:  # Positive momentum
+                signals.append({
+                    'symbol': ticker['symbol'],
+                    'source': 'VolumeMomentum',
+                    'type': 'BUY',
+                    'confidence': min(0.8, change / 12 + 0.4),
+                    'reason': f"High volume +{change:.1f}%",
+                    'score': float(ticker['volume']) * (1 + change/100)
+                })
+        
+        return signals[:3]  # Top 3 volume signals
     
-    def analyze_sentiment(self, title):
-        """Analyze sentiment from title text"""
-        title_lower = title.lower()
+    def get_gainer_signals(self, data):
+        """Signals from top gainers"""
+        # Sort by price change (descending)
+        gainers = sorted(data, key=lambda x: float(x['priceChangePercent']), reverse=True)[:5]
         
-        buy_words = ['buy', 'bull', 'long', 'up', 'rally', 'surge', 'breakout', 'pump']
-        sell_words = ['sell', 'bear', 'short', 'down', 'drop', 'crash', 'dump']
+        signals = []
+        for ticker in gainers:
+            change = float(ticker['priceChangePercent'])
+            if change > 4.0:  # Significant gain
+                signals.append({
+                    'symbol': ticker['symbol'],
+                    'source': 'TopGainer',
+                    'type': 'BUY',
+                    'confidence': min(0.85, change / 15),
+                    'reason': f"Top gainer: +{change:.1f}%",
+                    'score': change
+                })
         
-        buy_count = sum(1 for word in buy_words if word in title_lower)
-        sell_count = sum(1 for word in sell_words if word in title_lower)
+        return signals[:2]  # Top 2 gainers
+    
+    def get_oversold_signals(self, data):
+        """Signals for potential bounce from oversold conditions"""
+        # Sort by price change (ascending - biggest losers)
+        losers = sorted(data, key=lambda x: float(x['priceChangePercent']))[:5]
         
-        if buy_count > sell_count:
-            return 'BUY'
-        elif sell_count > buy_count:
-            return 'SELL'
-        else:
-            return 'BUY'  # Default to buy for neutral
+        signals = []
+        for ticker in losers:
+            change = float(ticker['priceChangePercent'])
+            volume = float(ticker['volume'])
+            
+            # Look for high volume losers (potential capitulation)
+            if change < -5.0 and volume > 500000:
+                signals.append({
+                    'symbol': ticker['symbol'],
+                    'source': 'OversoldBounce',
+                    'type': 'BUY',
+                    'confidence': 0.65,
+                    'reason': f"Oversold: {change:.1f}% with high volume",
+                    'score': abs(change) * volume / 1000000
+                })
+        
+        return signals[:2]  # Top 2 oversold candidates
+    
+    def get_fallback_signals(self):
+        """Fallback signals when API fails"""
+        print("⚠️ Using fallback signals...")
+        
+        # Simple rotation strategy
+        fallback_coins = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'ADAUSDT', 'DOTUSDT']
+        
+        signals = []
+        for symbol in fallback_coins[:3]:
+            signals.append({
+                'symbol': symbol,
+                'source': 'Fallback',
+                'type': 'BUY',
+                'confidence': 0.7,
+                'reason': "Fallback rotation",
+                'score': 0.7
+            })
+        
+        return signals
 
 class SignalExecutor:
     def __init__(self, trader):
         self.trader = trader
-        self.scraper = LiveSignalScraper()
+        self.signal_finder = SmartSignalFinder()
         self.trade_history = []
+        self.last_trade_time = None
     
-    def collect_all_signals(self):
-        """Collect signals from all sources"""
-        print("\n📡 Collecting LIVE signals from all sources...")
+    def collect_signals(self):
+        """Collect and process signals"""
+        print("\n📡 Collecting trading signals...")
         
-        all_signals = []
-        all_signals.extend(self.scraper.scrape_tradingview_live())
-        all_signals.extend(self.scraper.get_binance_top_volume())
-        all_signals.extend(self.scraper.get_market_movers())
+        signals = self.signal_finder.get_binance_signals_with_retry()
         
-        print(f"📊 Total signals collected: {len(all_signals)}")
-        return all_signals
-    
-    def analyze_and_execute(self):
-        """Analyze signals and execute best ones"""
-        signals = self.collect_all_signals()
-        
-        if not signals:
-            print("❌ No signals collected, skipping cycle")
-            return
-        
-        # Group by symbol and calculate consensus (same logic as original, no pandas)
-        symbol_data = {}
+        # Remove duplicates and sort by score
+        unique_signals = {}
         for signal in signals:
             symbol = signal['symbol']
-            if symbol not in symbol_data:
-                symbol_data[symbol] = {'buy': 0, 'sell': 0, 'confidence_sum': 0, 'sources': [], 'count': 0}
+            if symbol not in unique_signals or signal['score'] > unique_signals[symbol]['score']:
+                unique_signals[symbol] = signal
+        
+        sorted_signals = sorted(unique_signals.values(), key=lambda x: x['score'], reverse=True)
+        
+        print(f"📊 Found {len(sorted_signals)} qualified signals")
+        return sorted_signals
+    
+    def execute_best_signal(self):
+        """Execute the single best signal"""
+        signals = self.collect_signals()
+        
+        if not signals:
+            print("❌ No qualified signals found")
+            return
+        
+        # Show top 3 signals
+        print(f"\n🎯 Top signals:")
+        for i, signal in enumerate(signals[:3]):
+            print(f"   {i+1}. {signal['symbol']} - {signal['type']} "
+                  f"(Score: {signal['score']:.1f}, Conf: {signal['confidence']:.2f})")
+        
+        best_signal = signals[0]
+        
+        # Only trade if confidence is good
+        if best_signal['confidence'] > 0.6:
+            print(f"\n🚀 EXECUTING BEST SIGNAL: {best_signal['type']} {best_signal['symbol']}")
+            print(f"   Reason: {best_signal['reason']}")
+            print(f"   Confidence: {best_signal['confidence']:.2f}")
             
-            if signal['type'] == 'BUY':
-                symbol_data[symbol]['buy'] += 1
+            # Execute trade
+            order = self.trader.execute_real_demo_trade(
+                symbol=best_signal['symbol'],
+                side=best_signal['type']
+            )
+            
+            if order:
+                self.trade_history.append({
+                    'timestamp': datetime.now(),
+                    'symbol': best_signal['symbol'],
+                    'action': best_signal['type'],
+                    'order_id': order['orderId'],
+                    'status': order['status']
+                })
+                self.last_trade_time = datetime.now()
+                print(f"✅ Trade executed successfully!")
             else:
-                symbol_data[symbol]['sell'] += 1
-            
-            symbol_data[symbol]['confidence_sum'] += signal['confidence']
-            symbol_data[symbol]['sources'].append(signal['source'])
-            symbol_data[symbol]['count'] += 1
-        
-        # Rank symbols by signal strength (same logic as original)
-        ranked_symbols = []
-        for symbol, data in symbol_data.items():
-            total_signals = data['count']
-            buy_ratio = data['buy'] / total_signals
-            avg_confidence = data['confidence_sum'] / total_signals
-            
-            # Calculate final score
-            score = avg_confidence * (1 + (abs(buy_ratio - 0.5) * 2))  # Reward consensus
-            
-            action = 'BUY' if buy_ratio >= 0.5 else 'SELL'
-            consensus = max(buy_ratio, 1 - buy_ratio)  # How much agreement
-            
-            ranked_symbols.append({
-                'symbol': symbol,
-                'action': action,
-                'score': score,
-                'consensus': consensus,
-                'confidence': avg_confidence,
-                'total_signals': total_signals,
-                'sources': list(set(data['sources']))
-            })
-        
-        # Sort by score (manual sorting without pandas)
-        def get_score(signal):
-            return signal['score']
-        
-        ranked_symbols.sort(key=get_score, reverse=True)
-        
-        # Execute top signals
-        print(f"\n🎯 Top ranked signals:")
-        for i, signal in enumerate(ranked_symbols[:5]):
-            print(f"{i+1}. {signal['symbol']} - {signal['action']} "
-                  f"(Score: {signal['score']:.2f}, Consensus: {signal['consensus']:.1%})")
-        
-        # Execute top 1-2 signals
-        for signal in ranked_symbols[:2]:
-            if signal['score'] > 0.6:  # Minimum quality threshold
-                self.execute_signal(signal)
-    
-    def execute_signal(self, signal):
-        """Execute a trading signal"""
-        try:
-            symbol = signal['symbol']
-            action = signal['action']
-            
-            print(f"\n🚀 EXECUTING: {action} {symbol}")
-            print(f"   Confidence: {signal['confidence']:.2f}")
-            print(f"   Consensus: {signal['consensus']:.1%}")
-            print(f"   Sources: {', '.join(signal['sources'])}")
-            
-            # Determine position size (small for demo)
-            quantity = self.calculate_position_size(symbol)
-            
-            if quantity > 0:
-                # EXECUTE REAL TESTNET ORDER
-                order = self.trader.execute_real_demo_trade(
-                    symbol=symbol,
-                    side=action,
-                    quantity=quantity
-                )
-                
-                if order:
-                    self.trade_history.append({
-                        'timestamp': datetime.now(),
-                        'symbol': symbol,
-                        'action': action,
-                        'quantity': quantity,
-                        'order_id': order['orderId'],
-                        'status': order['status']
-                    })
-                    print(f"✅ Successfully executed REAL TESTNET order!")
-                else:
-                    print(f"❌ Order execution failed")
-            else:
-                print(f"❌ Invalid position size for {symbol}")
-                
-        except Exception as e:
-            print(f"❌ Signal execution failed: {e}")
-    
-    def calculate_position_size(self, symbol):
-    """Calculate appropriate position size with proper notional value"""
-    # Minimum notional value on Binance is usually $10-$15
-    size_map = {
-        'BTCUSDT': 0.001,    # ~$60-70
-        'ETHUSDT': 0.01,     # ~$30-40
-        'BNBUSDT': 0.1,      # ~$25-30
-        'ADAUSDT': 100,      # ~$40-50
-        'DOTUSDT': 5,        # ~$30-40
-        'LINKUSDT': 2,       # ~$30-40
-        'LTCUSDT': 0.5,      # ~$40-50
-        'BCHUSDT': 0.1,      # ~$40-50
-        'XRPUSDT': 100,      # ~$40-50
-        'default': 50        # ~$25-50 for most alts
-    }
-    
-    return size_map.get(symbol, size_map['default'])altcoins
+                print(f"❌ Trade execution failed")
+        else:
+            print(f"⏸️ Skipping trade - confidence too low: {best_signal['confidence']:.2f}")
 
 def main():
     print("""
-    🚀 BINANCE TESTNET LIVE TRADING BOT
-    ===================================
-    🔥 REAL ORDERS on Binance Testnet
-    📊 Live Signal Scraping (Firefox)
-    ⚡ Instant Execution
-    💰 DEMO MONEY ONLY - NO REAL RISK
-    ===================================
+    🚀 BINANCE TESTNET TRADING BOT
+    ==============================
+    🔥 REAL Testnet Orders
+    📊 Smart Signal Detection
+    💰 Proper Order Sizing ($25+)
+    ⚡ No Browser Dependencies
+    ==============================
     """)
     
-    # Initialize real testnet trader
+    # Initialize trader
     trader = RealBinanceTrader(TESTNET_API_KEY, TESTNET_API_SECRET, testnet=True)
     executor = SignalExecutor(trader)
     
@@ -508,31 +315,31 @@ def main():
     while True:
         try:
             cycle_count += 1
-            print(f"\n{'='*60}")
-            print(f"🔄 CYCLE {cycle_count} - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-            print(f"{'='*60}")
+            print(f"\n{'='*50}")
+            print(f"🔄 CYCLE {cycle_count} - {datetime.now().strftime('%H:%M:%S')}")
+            print(f"{'='*50}")
             
-            # Run signal collection and execution
-            executor.analyze_and_execute()
+            # Execute trading logic
+            executor.execute_best_signal()
             
-            # Show recent trade history
+            # Show recent activity
             if executor.trade_history:
-                print(f"\n📈 Recent Trades (Last 5):")
-                for trade in executor.trade_history[-5:]:
+                print(f"\n📈 Recent Trades:")
+                for trade in executor.trade_history[-3:]:
                     print(f"   {trade['timestamp'].strftime('%H:%M')} - "
-                          f"{trade['action']} {trade['quantity']} {trade['symbol']} "
+                          f"{trade['action']} {trade['symbol']} "
                           f"(ID: {trade['order_id']})")
             
-            print(f"\n💤 Waiting 3 minutes for next cycle...")
-            time.sleep(180)  # 3 minutes between cycles
+            print(f"\n💤 Waiting 5 minutes for next cycle...")
+            time.sleep(300)  # 5 minutes
             
         except KeyboardInterrupt:
-            print(f"\n🛑 Bot stopped by user after {cycle_count} cycles")
+            print(f"\n🛑 Bot stopped after {cycle_count} cycles")
             break
         except Exception as e:
-            print(f"❌ Error in main loop: {e}")
-            print("💤 Retrying in 60 seconds...")
-            time.sleep(60)
+            print(f"❌ Error: {e}")
+            print("💤 Retrying in 2 minutes...")
+            time.sleep(120)
 
 if __name__ == "__main__":
     main()
