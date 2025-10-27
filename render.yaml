@@ -1,16 +1,10 @@
-services:
-  - type: web
-    name: study-helper-pro-bot
-    env: python
-    plan: free
-    buildCommand: pip install -r requirements.txt
-    startCommand: python render_bot.py
-    envVars:
-      - key: BOT_TOKEN
-        sync: false
-      - key: BINANCE_WALLET_ADDRESS
-        sync: false
-      - key: ADMIN_USERNAME
-        value: "@Kingstonebridge"
-      - key: ADMIN_ID
-        value: "5665906172"
+# railway.json configuration
+{
+  "build": {
+    "builder": "NIXPACKS"
+  },
+  "deploy": {
+    "startCommand": "python render_demo_bot.py",
+    "restartPolicyType": "ON_FAILURE"
+  }
+}
